@@ -77,7 +77,8 @@ extension ProjectInitializer {
                     ),
                     sources: ["Sources/**"],
                     resources: ["Resources/**"],
-                    dependencies: [],
+                    dependencies: [
+                    ],
                     settings: .settings(
                         base: SettingsDictionary(),
                         configurations: [],
@@ -440,7 +441,7 @@ extension ProjectInitializer {
         let workspace = Workspace(
             name: "\(projectName)",
             projects: [
-                "App"
+                "App",
             ]
         )
         """

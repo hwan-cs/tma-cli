@@ -97,6 +97,9 @@ struct ModuleCreator {
         """,
         to: "\(modulePath)/Example/\(name)App.swift"
         )
+        try updateWorkspace(with: name, type: type)
+        try updateAppProject(with: name, type: type)
+        print("🔗 Added \(name) module as dependency to Workspace and App")
     }
     
     private func createDirectory(_ path: String) throws {
@@ -109,6 +112,86 @@ struct ModuleCreator {
             atomically: true,
             encoding: .utf8
         )
+    }
+    
+    private func updateWorkspace(with name: String, type: ModuleType) throws {
+        let workspacePath = "\(fm.currentDirectoryPath)/Workspace.swift"
+        guard fm.fileExists(atPath: workspacePath) else {
+            print("⚠️ Workspace.swift not found, skipping...")
+            return
+        }
+        
+        let moduleEntry = "\"\(type == .feature ? "Feature" : "Core")/\(name)\""
+
+        var content = try String(contentsOfFile: workspacePath)
+
+        // Avoid duplicates
+        guard !content.contains(moduleEntry) else {
+            return
+        }
+
+        // Insert inside the `projects: [`
+        if let range = content.range(of: "projects: [") {
+            if let endRange = content.range(of: "]", range: range.upperBound..<content.endIndex) {
+                content.insert(contentsOf: "\t\(moduleEntry),", at: endRange.lowerBound)
+                
+                // New range of closing bracket
+                if let newEnd = content.range(of: "]", range: range.upperBound..<content.endIndex) {
+                    let before = content.index(before: newEnd.lowerBound)
+
+                    // Ensure bracket is newline-separated
+                    if content[before] != "\n" {
+                        content.insert(contentsOf: "\n\t", at: newEnd.lowerBound)
+                    }
+                }
+            }
+        }
+
+        try write(content, to: workspacePath)
+        print("🛠️ Updated Workspace.swift")
+    }
+    
+    private func updateAppProject(with name: String, type: ModuleType) throws {
+        let appProjectPath = "\(fm.currentDirectoryPath)/App/Project.swift"
+        guard fm.fileExists(atPath: appProjectPath) else {
+            print("⚠️ App/Project.swift not found, skipping...")
+            return
+        }
+
+        var content = try String(contentsOfFile: appProjectPath)
+
+        let dependencyLine = ".project(target: \"\(name)\", path: \"../\(type == .feature ? "Feature" : "Core")/\(name)\")"
+
+        // Avoid duplicates
+        guard !content.contains(dependencyLine) else {
+            return
+        }
+
+        // Locate target where product is .app (as opposed to .unitTests)
+        guard let appTargetRange = content.range(of: "product: .app") else {
+            print("⚠️ Could not find app target in Project.swift")
+            return
+        }
+
+        // Find dependencies: [ ... ] of that target
+        if let depsRangeStart = content.range(of: "dependencies: [", range: appTargetRange.lowerBound..<content.endIndex),
+           let depsRangeEnd = content.range(of: "]", range: depsRangeStart.upperBound..<content.endIndex) {
+
+            content.insert(contentsOf: "\t\(dependencyLine),", at: depsRangeEnd.lowerBound)
+            
+            // New range of closing bracket
+            if let newEnd = content.range(of: "]", range: depsRangeStart.upperBound..<content.endIndex) {
+                let before = content.index(before: newEnd.lowerBound)
+
+                // Ensure bracket is newline-separated
+                if content[before] != "\n" {
+                    content.insert(contentsOf: "\n\t\t\t", at: newEnd.lowerBound)
+                }
+            }
+        }
+
+        try content.write(toFile: appProjectPath, atomically: true, encoding: .utf8)
+        print("🛠️ Updated App Project.swift")
     }
 }
 
