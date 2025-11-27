@@ -13,14 +13,6 @@ enum ModuleType {
     case core
 }
 
-struct RuntimeError: Error, CustomStringConvertible {
-    var description: String
-    
-    init(_ description: String) {
-        self.description = description
-    }
-}
-
 struct ModuleCreator {
     let fm = FileManager.default
     func createModule(named name: String, type: ModuleType) throws {
@@ -39,7 +31,13 @@ struct ModuleCreator {
         let modulePath = "\(rootPath)/\(name)"
         
         if fm.fileExists(atPath: modulePath) {
-            throw RuntimeError("Module '\(name)' already exists!")
+            throw NSError(
+                domain: "com.tma.cli",
+                code: 401,
+                userInfo: [
+                    NSLocalizedDescriptionKey : "Module '\(name)' already exists!"
+                ]
+            )
         }
 
         try fm.createDirectory(atPath: modulePath, withIntermediateDirectories: true)
@@ -102,18 +100,6 @@ struct ModuleCreator {
         print("🔗 Added \(name) module as dependency to Workspace and App")
     }
     
-    private func createDirectory(_ path: String) throws {
-        try fm.createDirectory(atPath: path, withIntermediateDirectories: true)
-    }
-    
-    private func write(_ content: String, to path: String) throws {
-        try content.write(
-            toFile: path,
-            atomically: true,
-            encoding: .utf8
-        )
-    }
-    
     private func updateWorkspace(with name: String, type: ModuleType) throws {
         let workspacePath = "\(fm.currentDirectoryPath)/Workspace.swift"
         guard fm.fileExists(atPath: workspacePath) else {
@@ -167,7 +153,6 @@ struct ModuleCreator {
             return
         }
 
-        // Locate target where product is .app (as opposed to .unitTests)
         guard let appTargetRange = content.range(of: "product: .app") else {
             print("⚠️ Could not find app target in Project.swift")
             return
@@ -196,7 +181,19 @@ struct ModuleCreator {
 }
 
 extension ModuleCreator {
-    private func generateProjectSwift(name: String, type: ModuleType) -> String {
+    func createDirectory(_ path: String) throws {
+        try fm.createDirectory(atPath: path, withIntermediateDirectories: true)
+    }
+    
+    func write(_ content: String, to path: String) throws {
+        try content.write(
+            toFile: path,
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+    
+    func generateProjectSwift(name: String, type: ModuleType) -> String {
         let factory = type == .feature ? "feature" : "core"
 
         return """
